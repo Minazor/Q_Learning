@@ -1,5 +1,10 @@
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
+import warnings
+import os
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 LEARNING_RATE = 0.1
 DISCOUNT = 0.95
@@ -24,6 +29,13 @@ q_table = np.random.uniform(
     low=-2, high=0, size=(DISCRETE_OS_SIZE + [env.action_space.n])
 )
 
+ep_rewards = []
+aggr_ep_reward = {"ep": [], "avg": [], "min": [], "max": []}
+
+
+if not os.path.exists("qtables"):
+    os.makedirs("qtables")
+
 
 def get_discrete_state(state):
     discrete_state = (state - env.observation_space.low) / discrete_os_win_size
@@ -31,6 +43,7 @@ def get_discrete_state(state):
 
 
 for episode in range(EPISODES):
+    episode_reward = 0
     render = False
     if episode % SHOW_EVERY == 0:
         render = True
@@ -49,7 +62,7 @@ for episode in range(EPISODES):
             action = np.random.randint(0, env.action_space.n)
 
         new_state, reward, termination, truncation, _ = env.step(action)
-
+        episode_reward += reward
         new_discrete_state = get_discrete_state(new_state)
 
         if termination or truncation:
@@ -72,4 +85,26 @@ for episode in range(EPISODES):
     if END_EPSILON_DECAYING >= episode >= START_EPSILON_DECAYING:
         epsilon -= epsilon_decay_value
 
-    env.close()
+    ep_rewards.append(episode_reward)
+
+    if not episode % 10 == 0:
+        np.save(f"qtables/{episode}-qtable.npy", q_table)
+
+    if not episode % SHOW_EVERY:
+        average_reward = sum(ep_rewards[-SHOW_EVERY:]) / len(ep_rewards[-SHOW_EVERY:])
+        aggr_ep_reward["ep"].append(episode)
+        aggr_ep_reward["avg"].append(average_reward)
+        aggr_ep_reward["min"].append(min(ep_rewards[-SHOW_EVERY:]))
+        aggr_ep_reward["max"].append(max(ep_rewards[-SHOW_EVERY:]))
+
+        print(
+            f"Episode: {episode} avg: {average_reward} min: {min(ep_rewards[-SHOW_EVERY:])}, max: {max(ep_rewards[-SHOW_EVERY:])}"
+        )
+
+env.close()
+
+plt.plot(aggr_ep_reward["ep"], aggr_ep_reward["avg"], label="avg")
+plt.plot(aggr_ep_reward["ep"], aggr_ep_reward["min"], label="min")
+plt.plot(aggr_ep_reward["ep"], aggr_ep_reward["max"], label="max")
+plt.legend(loc=4)
+plt.show()
